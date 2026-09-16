@@ -489,7 +489,7 @@ function route(r){
   if(typeof r !== 'string') r='schedule';
   if(r==='organizer')return organizerLogin();
   if(r==='profile')return profileHome();
-  if(r==='clock')return chessClock();
+  if(r==='clock'){chessClock();clockEnterFullscreen();return;}
   if(r==='schedule')return schedule();
   if(r==='rating')return rating();
   if(r==='admin')return admin();
@@ -535,10 +535,10 @@ function clockEnterFullscreen(){
    <button class="clock-fs-side clock-fs-top" onclick="clockPress('right')" aria-label="Верхние часы"><strong id="clockFsRight">05:00</strong></button>
    <button class="clock-fs-side clock-fs-bottom" onclick="clockPress('left')" aria-label="Нижние часы"><strong id="clockFsLeft">05:00</strong></button>
    <div class="clock-fs-center">
-     <button class="clock-fs-icon" onclick="clockStart()" aria-label="Старт или пауза">▶</button>
-     <button class="clock-fs-icon" onclick="clockReset()" aria-label="Сбросить">↻</button>
-     <button class="clock-fs-icon" onclick="clockToggleSettings()" aria-label="Настройки">⚙</button>
-     <button class="clock-fs-icon" onclick="clockExitFullscreen();route('schedule')" aria-label="Домой">⌂</button>
+     <button class="clock-fs-icon" onclick="clockStart()" aria-label="Старт или пауза"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6L19 12 8 5.2Z" fill="currentColor"/></svg></button>
+     <button class="clock-fs-icon" onclick="clockReset()" aria-label="Сбросить"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4.2L3 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 4.5V9h4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 13a8 8 0 0 0 14.8 4.2L21 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 19.5V15h-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+     <button class="clock-fs-icon" onclick="clockToggleSettings()" aria-label="Настройки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m19.2 13.4 1.2 1-.9 1.6-1.5-.5a7.8 7.8 0 0 1-1.8 1l-.3 1.6h-1.9l-.3-1.6a7.8 7.8 0 0 1-1.8-1l-1.5.5-.9-1.6 1.2-1a7.5 7.5 0 0 1 0-2.8l-1.2-1 .9-1.6 1.5.5a7.8 7.8 0 0 1 1.8-1l.3-1.6h1.9l.3 1.6a7.8 7.8 0 0 1 1.8 1l1.5-.5.9 1.6-1.2 1a7.5 7.5 0 0 1 0 2.8Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
+     <button class="clock-fs-icon" onclick="clockExitFullscreen();route('schedule')" aria-label="Домой"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1v-9Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
    </div>
    <div class="clock-fs-status" id="clockFsStatus">Пауза</div>
    <div class="clock-fs-settings" id="clockFsSettings">
