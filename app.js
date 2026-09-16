@@ -508,7 +508,7 @@ function route(r){
   if(typeof r !== 'string') r='schedule';
   if(r==='organizer')return organizerLogin();
   if(r==='profile')return profileHome();
-  if(r==='clock')return chessClock();
+  if(r==='clock'){chessClock();return;}
   if(r==='schedule')return schedule();
   if(r==='rating')return rating();
   if(r==='admin')return admin();
@@ -518,81 +518,68 @@ function route(r){
 }
 
 
-let clockState={left:300000,right:300000,inc:3000,active:null,running:false,lastTick:0,interval:null};
+let clockState={left:300000,right:300000,inc:3000,active:null,running:false,lastTick:0,interval:null,base:300000,fullscreen:false};
 function clockFmt(ms){ms=Math.max(0,Math.ceil(ms/1000));const m=Math.floor(ms/60),s=ms%60;return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')}
 function clockRender(){
- const l=document.getElementById('clockLeft'),r=document.getElementById('clockRight'),st=document.getElementById('clockStatus');
- if(!l||!r)return;
- l.textContent=clockFmt(clockState.left);r.textContent=clockFmt(clockState.right);
- l.classList.toggle('clock-active',clockState.active==='left');r.classList.toggle('clock-active',clockState.active==='right');
- l.classList.toggle('clock-zero',clockState.left<=0);r.classList.toggle('clock-zero',clockState.right<=0);
- if(st)st.textContent=clockState.running?(clockState.active==='left'?'Ход белых':'Ход чёрных'):'Пауза';
+ const ids=[['clockLeft','left'],['clockRight','right'],['clockFsLeft','left'],['clockFsRight','right']];
+ ids.forEach(([id,side])=>{const el=document.getElementById(id);if(el)el.textContent=clockFmt(clockState[side])});
+ ['left','right'].forEach(side=>{
+   const el=document.getElementById(side==='left'?'clockLeft':'clockRight');
+   if(el){el.classList.toggle('clock-active',clockState.active===side);el.classList.toggle('clock-zero',clockState[side]<=0)}
+   const fs=document.getElementById(side==='left'?'clockFsLeft':'clockFsRight');
+   if(fs){fs.classList.toggle('clock-active',clockState.active===side);fs.classList.toggle('clock-zero',clockState[side]<=0)}
+ });
+ const st=document.getElementById('clockStatus');if(st)st.textContent=clockState.running?'Идёт игра':'Пауза';
+ const fsst=document.getElementById('clockFsStatus');if(fsst)fsst.textContent=clockState.running?'Идёт игра':'Пауза';
 }
-function clockTick(){if(!clockState.running||!clockState.active)return;const now=Date.now(),delta=Math.min(now-clockState.lastTick,1000);clockState.lastTick=now;clockState[clockState.active]-=delta;if(clockState[clockState.active]<=0){clockState[clockState.active]=0;clockState.running=false;clockState.active=null}clockRender()}
-function clockStart(){if(clockState.left<=0||clockState.right<=0)return;if(!clockState.active)clockState.active='left';clockState.running=!clockState.running;clockState.lastTick=Date.now();clockRender()}
-function clockPress(side){if(clockState[side]<=0)return;if(clockState.running&&clockState.active===side){clockState[side]+=clockState.inc;clockState.active=side==='left'?'right':'left';clockState.lastTick=Date.now();clockRender();return}if(!clockState.running){clockState.active=side==='left'?'right':'left';clockState.lastTick=Date.now();clockState.running=true;clockRender()}}
+function clockTick(){if(!clockState.running||!clockState.active)return;const now=performance.now(),delta=Math.min(now-clockState.lastTick,1000);clockState.lastTick=now;clockState[clockState.active]-=delta;if(clockState[clockState.active]<=0){clockState[clockState.active]=0;clockState.running=false;clockState.active=null}clockRender()}
+function clockStart(){if(clockState.left<=0||clockState.right<=0)return;if(!clockState.active)clockState.active='left';clockState.running=!clockState.running;clockState.lastTick=performance.now();clockRender()}
+function clockPress(side){if(clockState[side]<=0)return;if(clockState.running&&clockState.active===side){clockState[side]+=clockState.inc;clockState.active=side==='left'?'right':'left';clockState.lastTick=performance.now();clockRender();return}if(!clockState.running){clockState.active=side==='left'?'right':'left';clockState.lastTick=performance.now();clockState.running=true;clockRender()}}
 function clockReset(){clockState.running=false;clockState.active=null;clockState.left=clockState.base;clockState.right=clockState.base;clockRender()}
-function clockPreset(min,inc){clockState.base=min*60000;clockState.inc=inc*1000;clockReset();const p=document.getElementById('clockPreset');if(p)p.value=min+'+'+inc}
+function clockPreset(min,inc){clockState.base=min*60000;clockState.inc=inc*1000;clockReset();const p=document.getElementById('clockPreset');if(p)p.value=min+'+'+inc;const m=document.getElementById('clockMin');const i=document.getElementById('clockInc');if(m)m.value=min;if(i)i.value=inc}
 function clockCustom(){const m=Math.max(1,Math.min(180,parseInt(document.getElementById('clockMin').value,10)||5));const inc=Math.max(0,Math.min(60,parseInt(document.getElementById('clockInc').value,10)||0));clockPreset(m,inc)}
 function clockSwap(){const a=clockState.left;clockState.left=clockState.right;clockState.right=a;const s=clockState.active;if(s)clockState.active=s==='left'?'right':'left';clockRender()}
+function clockToggleSettings(){const p=document.getElementById('clockFsSettings');if(p)p.classList.toggle('open')}
 function clockExitFullscreen(){
- document.body.classList.remove('clock-fullscreen-active');
- document.documentElement.classList.remove('clock-document-fullscreen');
- if(document.fullscreenElement && document.exitFullscreen){document.exitFullscreen().catch(()=>{});}
+ const fs=document.getElementById('clockFullscreen');if(fs)fs.remove();
+ document.body.classList.remove('clock-lock');clockState.fullscreen=false;
+ if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});
+ clockRender();
 }
 function clockEnterFullscreen(){
- document.body.classList.add('clock-fullscreen-active');
- document.documentElement.classList.add('clock-document-fullscreen');
- // Native fullscreen is an extra layer on desktop/Android. CSS fullscreen remains the fallback.
- if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen().catch(()=>{});}
+ if(clockState.fullscreen)return;
+ clockState.fullscreen=true;document.body.classList.add('clock-lock');
+ const el=document.createElement('div');el.id='clockFullscreen';el.className='clock-fullscreen';
+ el.innerHTML=`
+   <button class="clock-fs-side clock-fs-top" onpointerdown="clockPress('right');event.preventDefault()" aria-label="Верхние часы"><strong id="clockFsRight">05:00</strong></button>
+   <button class="clock-fs-side clock-fs-bottom" onpointerdown="clockPress('left');event.preventDefault()" aria-label="Нижние часы"><strong id="clockFsLeft">05:00</strong></button>
+   <div class="clock-fs-center">
+     <button class="clock-fs-icon" onclick="clockStart()" aria-label="Старт или пауза"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6L19 12 8 5.2Z" fill="currentColor"/></svg></button>
+     <button class="clock-fs-icon" onclick="clockReset()" aria-label="Сбросить"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4.2L3 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 4.5V9h4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 13a8 8 0 0 0 14.8 4.2L21 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 19.5V15h-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+     <button class="clock-fs-icon" onclick="clockToggleSettings()" aria-label="Настройки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m19.2 13.4 1.2 1-.9 1.6-1.5-.5a7.8 7.8 0 0 1-1.8 1l-.3 1.6h-1.9l-.3-1.6a7.8 7.8 0 0 1-1.8-1l-1.5.5-.9-1.6 1.2-1a7.5 7.5 0 0 1 0-2.8l-1.2-1 .9-1.6 1.5.5a7.8 7.8 0 0 1 1.8-1l.3-1.6h1.9l.3 1.6a7.8 7.8 0 0 1 1.8 1l1.5-.5.9 1.6-1.2 1a7.5 7.5 0 0 1 0 2.8Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
+     <button class="clock-fs-icon" onclick="clockExitFullscreen();route('schedule')" aria-label="Домой"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1v-9Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
+   </div>
+   <div class="clock-fs-status" id="clockFsStatus">Пауза</div>
+   <div class="clock-fs-settings" id="clockFsSettings">
+     <div class="clock-fs-settings-head"><b>Настройки часов</b><button class="clock-fs-close" onclick="clockToggleSettings()">×</button></div>
+     <div class="clock-fs-presets"><button onclick="clockPreset(3,2);clockToggleSettings()">3+2</button><button onclick="clockPreset(5,3);clockToggleSettings()">5+3</button><button onclick="clockPreset(10,0);clockToggleSettings()">10+0</button><button onclick="clockPreset(15,10);clockToggleSettings()">15+10</button></div>
+     <div class="clock-fs-custom"><input id="clockFsMin" type="number" min="1" max="180" value="5"><span>+</span><input id="clockFsInc" type="number" min="0" max="60" value="3"><span>сек</span><button onclick="clockFsCustom();clockToggleSettings()">Установить</button></div>
+     <button class="clock-fs-swap" onclick="clockSwap();clockToggleSettings()">Поменять местами</button>
+   </div>`;
+ document.body.appendChild(el);clockRender();
+ if(el.requestFullscreen){el.requestFullscreen().catch(()=>{})}
 }
-function installClockFullscreenStyles(){
- if(document.getElementById('clockFullscreenStyles'))return;
- const style=document.createElement('style');style.id='clockFullscreenStyles';style.textContent=`
-html.clock-document-fullscreen,html.clock-document-fullscreen body{width:100%;height:100%;overflow:hidden}
-body.clock-fullscreen-active{overflow:hidden!important;background:#000!important}
-body.clock-fullscreen-active>.nav{display:none!important}
-body.clock-fullscreen-active>main.shell{position:fixed!important;inset:0!important;width:100%!important;max-width:none!important;margin:0!important;padding:0!important;z-index:9999!important;background:#000!important}
-body.clock-fullscreen-active .clock-page-hero{display:none!important}
-body.clock-fullscreen-active .clock-page-section{position:fixed!important;inset:0!important;width:100%!important;height:100dvh!important;margin:0!important;padding:0!important;z-index:10000!important;background:#000!important}
-body.clock-fullscreen-active .clock-wrap{position:fixed!important;inset:0!important;width:100%!important;max-width:none!important;height:100dvh!important;min-height:100dvh!important;margin:0!important;padding:0!important;background:#000!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
-body.clock-fullscreen-active .clock-toolbar{display:none!important}
-body.clock-fullscreen-active .clock-board{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;display:grid!important;grid-template-columns:1fr!important;grid-template-rows:1fr 1fr!important;gap:0!important;background:#000!important}
-body.clock-fullscreen-active .clock-side{min-height:0!important;height:100%!important;width:100%!important;border:0!important;border-radius:0!important;border-bottom:1px solid #252525!important;background:#0b0b0b!important;padding:0!important;margin:0!important;display:flex!important;align-items:center!important;justify-content:center!important;color:#fff!important;touch-action:manipulation!important;-webkit-tap-highlight-color:transparent!important;user-select:none!important}
-body.clock-fullscreen-active .clock-side:first-child strong{transform:rotate(180deg)}
-body.clock-fullscreen-active .clock-side.clock-active{background:#171717!important}
-body.clock-fullscreen-active .clock-side.clock-zero{background:#080808!important;color:#555!important}
-body.clock-fullscreen-active .clock-side strong{font-size:clamp(72px,22vw,260px)!important;line-height:.9!important;font-weight:700!important;letter-spacing:-.055em!important;font-variant-numeric:tabular-nums!important}
-body.clock-fullscreen-active .clock-actions{position:fixed!important;left:50%!important;bottom:max(10px,env(safe-area-inset-bottom))!important;transform:translateX(-50%)!important;z-index:10002!important;margin:0!important;padding:6px!important;border:1px solid #292929!important;border-radius:14px!important;background:rgba(12,12,12,.86)!important;backdrop-filter:blur(10px)!important;-webkit-backdrop-filter:blur(10px)!important;display:flex!important;gap:6px!important;flex-wrap:nowrap!important}
-body.clock-fullscreen-active .clock-actions button{min-height:34px!important;padding:7px 10px!important;font-size:12px!important;border-radius:9px!important;white-space:nowrap!important}
-body.clock-fullscreen-active .clock-home{font-size:18px!important;padding:5px 11px!important}
-body.clock-fullscreen-active .clock-status{position:fixed!important;left:50%!important;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 58px)!important;transform:translateX(-50%)!important;z-index:10002!important;margin:0!important;min-height:0!important;padding:4px 9px!important;border-radius:8px!important;background:rgba(0,0,0,.55)!important;color:#777!important;font-size:11px!important;pointer-events:none!important}
-@media(max-width:600px){body.clock-fullscreen-active .clock-actions{bottom:max(6px,env(safe-area-inset-bottom))!important}body.clock-fullscreen-active .clock-actions button{min-height:32px!important;padding:6px 8px!important;font-size:11px!important}body.clock-fullscreen-active .clock-side strong{font-size:clamp(62px,23vw,150px)!important}body.clock-fullscreen-active .clock-status{bottom:calc(max(6px,env(safe-area-inset-bottom)) + 52px)!important}}
-`;
- document.head.appendChild(style);
-}
+function clockFsCustom(){const m=Math.max(1,Math.min(180,parseInt(document.getElementById('clockFsMin').value,10)||5));const inc=Math.max(0,Math.min(60,parseInt(document.getElementById('clockFsInc').value,10)||0));clockPreset(m,inc)}
 function chessClock(){
- installClockFullscreenStyles();
  if(clockState.interval)clearInterval(clockState.interval);
  if(!clockState.base)clockState.base=300000;
- clockExitFullscreen();
- layout(`<section class="hero clock-page-hero"><div class="eyebrow">LOVE CHESS</div><h1>Шахматные часы</h1><p>Два цифровых таймера с добавлением времени после хода.</p></section>
- <section class="section clock-page-section"><div class="clock-wrap">
+ layout(`<section class="hero"><div class="eyebrow">LOVE CHESS</div><h1>Шахматные часы</h1><p>Два цифровых таймера с добавлением времени после хода.</p></section>
+ <section class="section"><div class="clock-wrap">
    <div class="clock-toolbar"><div class="clock-presets"><button class="ghost" onclick="clockPreset(3,2)">3+2</button><button class="ghost" onclick="clockPreset(5,3)">5+3</button><button class="ghost" onclick="clockPreset(10,0)">10+0</button><button class="ghost" onclick="clockPreset(15,10)">15+10</button></div><div class="clock-custom"><input id="clockMin" type="number" min="1" max="180" value="5" aria-label="Минуты"><span>+</span><input id="clockInc" type="number" min="0" max="60" value="3" aria-label="Добавление секунд"><span>сек</span><button class="primary" onclick="clockCustom()">Установить</button></div></div>
-   <div class="clock-board"><button class="clock-side" onclick="clockPress('left')" aria-label="Верхние часы"><strong id="clockLeft">05:00</strong></button><button class="clock-side" onclick="clockPress('right')" aria-label="Нижние часы"><strong id="clockRight">05:00</strong></button></div>
-   <div class="clock-actions"><button class="primary" onclick="clockStart()">Старт / Пауза</button><button class="ghost" onclick="clockReset()">Сбросить</button><button class="ghost" onclick="clockSwap()">Поменять местами</button><button class="ghost clock-home" onclick="clockExitFullscreen();route('schedule')" aria-label="На главную">⌂</button></div><div id="clockStatus" class="clock-status" aria-live="polite">Пауза</div>
+   <div class="clock-board"><button class="clock-side" onpointerdown="clockPress('left');event.preventDefault()" aria-label="Левые часы"><strong id="clockLeft">05:00</strong></button><button class="clock-side" onpointerdown="clockPress('right');event.preventDefault()" aria-label="Правые часы"><strong id="clockRight">05:00</strong></button></div>
+   <div class="clock-actions"><button class="primary" onclick="clockStart()">Старт / Пауза</button><button class="ghost" onclick="clockReset()">Сбросить</button><button class="ghost" onclick="clockSwap()">Поменять местами</button><button class="ghost clock-fullscreen-open" onclick="clockEnterFullscreen()">На весь экран</button></div><div id="clockStatus" class="clock-status" aria-live="polite">Пауза</div>
  </div></section>`,'clock');
- clockRender();
- clockEnterFullscreen();
- clockState.interval=setInterval(clockTick,100);
+ clockRender();clockState.interval=setInterval(clockTick,50);
 }
-document.addEventListener('fullscreenchange',()=>{
- if(!document.fullscreenElement && document.body.classList.contains('clock-fullscreen-active')){
-   document.body.classList.add('clock-fullscreen-active');
- }
-});
-document.addEventListener('keydown',e=>{
- if(e.key==='Escape' && document.body.classList.contains('clock-fullscreen-active')){clockExitFullscreen();route('schedule');}
-});
 window.addEventListener('hashchange',()=>{ const r=location.hash.replace(/^#/, '')||'schedule'; route(r); });
 schedule();
