@@ -19,7 +19,7 @@ let db=JSON.parse(localStorage.getItem(KEY)||'null')||seed;
 function save(){localStorage.setItem(KEY,JSON.stringify(db))}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function nav(active){return `<nav class="nav"><div class="shell navin"><button class="brand-logo" onclick="route('schedule')" aria-label="LOVE CHESS"><div class="brand-wordmark">LOVE CHESS</div></button><div class="links"><button class="${active==='schedule'?'active':''}" onclick="route('schedule')">Расписание</button><button class="${active==='rating'?'active':''}" onclick="route('rating')">Рейтинг</button><button class="${active==='profile'?'active':''}" onclick="route('profile')">Мой профиль</button><button class="${active==='clock'?'active':''}" onclick="route('clock')">Часы</button><button class="${active==='organizer'?'active':''}" onclick="route('organizer')">Организатор</button></div></div></nav>`}
-function layout(content,active){document.getElementById('app').innerHTML=nav(active)+`<main class="shell">${content}</main>`}
+function layout(content,active){document.getElementById('app').innerHTML=nav(active)+`<main class="shell">${content}</main>`;if(active==='schedule'){setTimeout(()=>{renderPhotos();startPhotoAuto();},0)}else{stopPhotoAuto()}}
 function fmt(d){return new Date(d+'T12:00:00').toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'})}
 function player(id){return db.players[id]||(db.players[id]={rating:1000,games:0,w:0,d:0,l:0,tournaments:[],history:[1000],avatar:'pawn'})}
 function displayName(id){const p=db.players[id];return p&&p.nickname?p.nickname:id}
@@ -29,7 +29,24 @@ function ensurePlayerNicknames(){let changed=false;Object.keys(db.players).forEa
 ensurePlayerNicknames()
 Object.keys(db.players).forEach(id=>{if(!db.players[id].avatar)db.players[id].avatar='pawn'}); save()
 function getStandings(t){const s={};t.players.forEach(id=>s[id]={id,points:0,buchholz:0,played:[],colors:[]});(t.roundData||[]).forEach(r=>r.pairs.forEach(m=>{if(m.bye){s[m.white].points+=1;s[m.white].colors.push('W');return}s[m.white].played.push(m.black);s[m.black].played.push(m.white);s[m.white].colors.push('W');s[m.black].colors.push('B');if(m.result==='1-0')s[m.white].points+=1;if(m.result==='0-1')s[m.black].points+=1;if(m.result==='0.5-0.5'){s[m.white].points+=.5;s[m.black].points+=.5}}));Object.values(s).forEach(x=>x.buchholz=x.played.reduce((sum,opp)=>sum+(s[opp]?.points||0),0));return Object.values(s).sort((a,b)=>b.points-a.points||b.buchholz-a.buchholz||player(b.id).rating-player(a.id).rating)}
-function standingsTable(rows){return `<table class="table"><thead><tr><th>#</th><th>Игрок</th><th>Рейтинг</th><th>Очки</th><th>BH</th></tr></thead><tbody>${rows.map((x,i)=>`<tr><td>${i+1}</td><td><button class="ghost" onclick="profile('${x.id}')">${esc(displayName(x.id))}</button></td><td>${player(x.id).rating}</td><td><b>${x.points}</b></td><td>${x.buchholz.toFixed(1)}</td></tr>`).join('')}</tbody></table>`}
+function standingsTable(rows){
+ const t=arguments.length>1?arguments[1]:null;
+ const rounds=t?.roundData||[];
+ const statById={};
+ rows.forEach(x=>statById[x.id]={w:0,d:0,l:0,results:[]});
+ rounds.forEach(r=>(r.pairs||[]).forEach(m=>{
+   if(!statById[m.white])return;
+   if(m.bye){statById[m.white].results.push('BYE');return}
+   if(!statById[m.black])return;
+   const a=statById[m.white],b=statById[m.black];
+   if(m.result==='1-0'){a.w++;b.l++;a.results.push('1');b.results.push('0')}
+   else if(m.result==='0-1'){a.l++;b.w++;a.results.push('0');b.results.push('1')}
+   else if(m.result==='0.5-0.5'){a.d++;b.d++;a.results.push('½');b.results.push('½')}
+   else {a.results.push('—');b.results.push('—')}
+ }));
+ const completedRounds=rounds.length;
+ return `<div class="standings-wrap"><table class="table standings-table"><thead><tr><th class="rank-col">#</th><th>Игрок</th><th>Рейтинг</th><th class="points-col">Очки</th><th>BH</th><th>П / Н / П</th>${completedRounds?`<th class="results-col">Результаты</th>`:''}</tr></thead><tbody>${rows.map((x,i)=>{const st=statById[x.id]||{w:0,d:0,l:0,results:[]};const leader=i===0&&x.points>0;return `<tr class="${leader?'leader-row':''}"><td class="rank-cell"><span class="rank-number">${i+1}</span></td><td><button class="ghost player-link" onclick="profile('${x.id}')">${esc(displayName(x.id))}</button></td><td class="rating-cell">${player(x.id).rating}</td><td class="points-cell"><b>${Number.isInteger(x.points)?x.points:x.points.toFixed(1)}</b></td><td>${x.buchholz.toFixed(1)}</td><td class="record-cell"><span class="win-count">${st.w}</span> / ${st.d} / <span class="loss-count">${st.l}</span></td>${completedRounds?`<td class="results-cell">${st.results.map((res,j)=>`<span class="round-result ${res==='1'?'win':res==='0'?'loss':res==='½'?'draw':res==='BYE'?'bye':''}" title="Тур ${j+1}">${res}</span>`).join('')}</td>`:''}</tr>`}).join('')}</tbody></table></div>`
+}
 function roundBlock(t,r,readonly=false){
   if(!r)return '';
   const ri=(t.roundData||[]).indexOf(r);
@@ -37,16 +54,18 @@ function roundBlock(t,r,readonly=false){
   return `<section class="section round-panel">
     <div class="row round-panel-head"><div><h2>Тур ${r.number}</h2><span class="tag">${r.completed?'Результаты внесены':'Внесите результаты'}</span></div></div>
     <div class="matches">${(r.pairs||[]).map((m,i)=>`<div class="match card">
-      <div><span class="board">Стол ${i+1}</span><b>${esc(displayName(m.white))}</b> <span class="muted">vs</span> <b>${esc(m.black?displayName(m.black):'BYE')}</b></div>
-      ${m.bye?`<span class="result bye">BYE +1</span>`:editable?`<select onchange="setResult('${t.id}',${ri},${i},this.value)"><option value="">Результат</option><option value="1-0" ${m.result==='1-0'?'selected':''}>1–0</option><option value="0-1" ${m.result==='0-1'?'selected':''}>0–1</option><option value="0.5-0.5" ${m.result==='0.5-0.5'?'selected':''}>½–½</option></select>`:`<span class="result readonly-result">${m.result==='1-0'?'1–0':m.result==='0-1'?'0–1':m.result==='0.5-0.5'?'½–½':'—'}</span>`}
+      ${m.bye?`<div class="readonly-match-content"><div class="readonly-board">Стол ${i+1}</div><div class="readonly-player white-player"><b>${esc(displayName(m.white))}</b></div><div class="readonly-score score-bye">BYE</div><div class="readonly-player black-player"><span class="muted">+1 очко</span></div></div>`:readonly||!editable?`<div class="readonly-match-content"><div class="readonly-board">Стол ${i+1}</div><div class="readonly-player white-player"><b>${esc(displayName(m.white))}</b></div><div class="readonly-score ${m.result==='1-0'?'score-win-white':m.result==='0-1'?'score-win-black':m.result==='0.5-0.5'?'score-draw':'score-empty'}">${m.result==='1-0'?'1–0':m.result==='0-1'?'0–1':m.result==='0.5-0.5'?'½–½':'—'}</div><div class="readonly-player black-player"><b>${esc(displayName(m.black))}</b></div></div>`:`<div><span class="board">Стол ${i+1}</span><b>${esc(displayName(m.white))}</b> <span class="muted">vs</span> <b>${esc(displayName(m.black))}</b></div>
+      <select onchange="setResult('${t.id}',${ri},${i},this.value)"><option value="">Результат</option><option value="1-0" ${m.result==='1-0'?'selected':''}>1–0</option><option value="0-1" ${m.result==='0-1'?'selected':''}>0–1</option><option value="0.5-0.5" ${m.result==='0.5-0.5'?'selected':''}>½–½</option></select>`}
     </div>`).join('')}</div>
     ${editable?`<div class="actions"><button class="primary" onclick="finishRound('${t.id}')">Сохранить результаты тура</button></div>`:''}
   </section>`;
 }
-function tournament(id){
+function tournament(id, selectedRound){
   const t=db.tournaments.find(x=>x.id===id); if(!t)return;
   const rows=getStandings(t);
-  const r=t.roundData?.[t.currentRound-1];
+  const totalRounds=t.roundData?.length||0;
+  const selectedIndex=Number.isInteger(selectedRound) ? Math.max(0,Math.min(selectedRound-1,totalRounds-1)) : Math.max(0,totalRounds-1);
+  const r=t.roundData?.[selectedIndex];
   const undoButtons=t.currentRound>0?`<div class="round-tools"><button class="danger" onclick="deleteLastRound('${t.id}')">Удалить последний тур</button>${r?.completed?`<button class="ghost" onclick="editLastRound('${t.id}')">Изменить результаты тура ${t.currentRound}</button>`:''}</div>`:'';
   const deleteBtn=isOrganizer()?`<button class="danger" onclick="deleteTournament('${t.id}')">Удалить турнир</button>`:'';
   const registrationOpen=t.currentRound===0 && t.status==='Регистрация';
@@ -56,8 +75,8 @@ function tournament(id){
   const content=`<section class="hero"><div class="eyebrow">Турнир</div><h1>${esc(t.name)}</h1><p>${fmt(t.date)} · ${esc(t.time)} · ${esc(t.place)}</p><p class="muted">Швейцарская жеребьёвка: без повторных встреч, с учётом очков, цветов и BYE.</p><div class="hero-actions"><button class="primary" onclick="startRound('${t.id}')">${t.currentRound===0?'Начать турнир':(t.status==='Завершён'?'Турнир завершён':'Сформировать следующий тур')}</button><button class="ghost" onclick="route('schedule')">← Расписание</button><button class="ghost" onclick="tournamentSettings('${t.id}')">⚙ Настройки турнира</button>${deleteBtn}</div>${undoButtons}</section>
   ${registrationBlock}
   <section class="section"><div class="grid"><div class="card"><div class="meta">Формат</div><div class="title">${esc(t.format)}</div><div class="meta">${esc(t.control)} · ${t.rounds} туров</div></div><div class="card"><div class="meta">Тур</div><div class="rating smallrating">${t.currentRound} / ${t.rounds}</div></div><div class="card"><div class="meta">Участников</div><div class="rating smallrating">${t.players.length}</div></div></div></section>
-  ${t.currentRound>0?roundBlock(t,r):`<section class="section"><div class="card"><h2>Участники</h2><div class="addrow"><input id="newPlayer" placeholder="Например RomaChess"><button class="primary" onclick="addPlayer('${t.id}')">Добавить</button></div>${standingsTable(rows)}</div></section>`}
-  ${t.currentRound>0?`<section class="section"><h2>Таблица</h2>${standingsTable(rows)}</section>`:''}`;
+  ${t.currentRound>0?`<section class="section round-selector-section"><div class="round-selector-head"><div><div class="eyebrow">Туры</div><h2>Просмотр туров</h2></div><span class="muted round-selector-count">${totalRounds} из ${t.rounds}</span></div><div class="round-selector">${(t.roundData||[]).map((rr,i)=>`<button class="round-tab ${i===selectedIndex?'active':''}" onclick="tournament('${t.id}',${i+1})">Тур ${rr.number}</button>`).join('')}</div></section>${roundBlock(t,r)}`:`<section class="section"><div class="card"><h2>Участники</h2><div class="addrow"><input id="newPlayer" placeholder="Например RomaChess"><button class="primary" onclick="addPlayer('${t.id}')">Добавить</button></div>${standingsTable(rows,t)}</div></section>`}
+  ${t.currentRound>0?`<section class="section"><div class="row standings-heading"><div><h2>Турнирная таблица</h2><p class="muted">Очки → Buchholz → рейтинг. Результаты по турам — справа.</p></div></div>${standingsTable(rows,t)}</section>`:''}`;
   layout(content,'schedule');
 }
 
@@ -317,7 +336,7 @@ function addPlayer(tid){
  if(!t.playerStatus)t.playerStatus={};
  t.players.push(id);t.playerStatus[id]='active';save();tournament(tid);
 }
-function schedule(){photoIndex=0;let ts=db.tournaments.slice().sort((a,b)=>a.date.localeCompare(b.date));layout(`<section class="hero"><div class="eyebrow">Шахматное сообщество</div><h1>LOVE CHESS</h1><p>LOVE CHESS — шахматное сообщество, которое объединяет людей через игру, турниры и живое общение. Здесь мы проводим регулярные турниры, знакомимся, играем и следим за своим прогрессом.</p><section class="photo-section"><div class="photo-head"><div><div class="eyebrow">LOVE CHESS</div><h2>Как это происходит</h2></div><div class="photo-controls"><button class="photo-btn" onclick="photoPrev()">←</button><button class="photo-btn" onclick="photoNext()">→</button></div></div><div class="photo-gallery"><button class="photo-arrow left" onclick="photoPrev()">‹</button><div class="photo-track" id="photoTrack"><div class="photo-slide"><img src="photos/love-chess-01.webp" alt="LOVE CHESS — фото с турнира" loading="eager"></div><div class="photo-slide"><img src="photos/love-chess-02.webp" alt="LOVE CHESS — фото с турнира" loading="eager"></div><div class="photo-slide"><img src="photos/love-chess-03.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-04.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-05.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-06.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-07.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-08.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-09.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-10.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div></div><button class="photo-arrow right" onclick="photoNext()">›</button></div><div class="photo-dots" id="photoDots"></div></section></section><section class="section"><div class="row"><h2>Ближайшие турниры</h2><button class="primary" onclick="route('admin')">+ Создать</button></div><div class="grid">${ts.map(t=>`<article class="card tournament"><div><span class="tag">${esc(t.status)}</span><div class="title">${esc(t.name)}</div><div class="meta">${fmt(t.date)} · ${esc(t.time)}</div><div class="meta">${esc(t.place)} · ${esc(t.format)} · ${esc(t.control)}</div></div><div class="row"><span class="meta">${t.rounds} туров · ${t.players.length} игроков</span><div class="settings-actions">${t.status==='Регистрация'?`<button class="primary" onclick="tournament('${t.id}')">Зарегистрироваться</button>`:''}<button class="ghost" onclick="tournament('${t.id}')">Подробнее →</button></div></div></article>`).join('')}</div></section>`,`schedule`)}
+function schedule(){photoIndex=0;let ts=db.tournaments.slice().sort((a,b)=>a.date.localeCompare(b.date));layout(`<section class="hero"><div class="eyebrow">Шахматное сообщество</div><h1>LOVE CHESS</h1><p>LOVE CHESS — шахматное сообщество, которое объединяет людей через игру, турниры и живое общение. Здесь мы проводим регулярные турниры, знакомимся, играем и следим за своим прогрессом.</p><section class="photo-section"><div class="photo-head"><div><div class="eyebrow">LOVE CHESS</div><h2>Как это происходит</h2></div><div class="photo-controls"><button class="photo-btn" onclick="photoPrev()">←</button><button class="photo-btn" onclick="photoNext()">→</button></div></div><div class="photo-gallery"><button class="photo-arrow left" onclick="photoPrev()">‹</button><div class="photo-track" id="photoTrack"><div class="photo-slide"><img src="photos/love-chess-01.webp" alt="LOVE CHESS — фото с турнира" loading="eager"></div><div class="photo-slide"><img src="photos/love-chess-02.webp" alt="LOVE CHESS — фото с турнира" loading="eager"></div><div class="photo-slide"><img src="photos/love-chess-03.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-04.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-05.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-06.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-07.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-08.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-09.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-10.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div><div class="photo-slide"><img src="photos/love-chess-11.webp" alt="LOVE CHESS — фото с турнира" loading="lazy"></div></div><button class="photo-arrow right" onclick="photoNext()">›</button></div><div class="photo-dots" id="photoDots"></div></section></section><section class="section"><div class="row"><h2>Ближайшие турниры</h2><button class="primary" onclick="route('admin')">+ Создать</button></div><div class="grid">${ts.map(t=>`<article class="card tournament"><div><span class="tag">${esc(t.status)}</span><div class="title">${esc(t.name)}</div><div class="meta">${fmt(t.date)} · ${esc(t.time)}</div><div class="meta">${esc(t.place)} · ${esc(t.format)} · ${esc(t.control)}</div></div><div class="row"><span class="meta">${t.rounds} туров · ${t.players.length} игроков</span><div class="settings-actions">${t.status==='Регистрация'?`<button class="primary" onclick="tournament('${t.id}')">Зарегистрироваться</button>`:''}<button class="ghost" onclick="tournament('${t.id}')">Подробнее →</button></div></div></article>`).join('')}</div></section>`,`schedule`)}
 function rating(){let rows=Object.entries(db.players).sort((a,b)=>b[1].rating-a[1].rating);layout(`<section class="hero"><div class="eyebrow">LOVE CHESS RATING</div><h1>Рейтинг игроков</h1><p>Рейтинг сохраняется между турнирами и меняется после сыгранных партий.</p></section><section class="section"><table class="table"><thead><tr><th>#</th><th>Игрок</th><th>Рейтинг</th><th>Партии</th><th>П / П / Н</th></tr></thead><tbody>${rows.map(([id,p],i)=>`<tr><td>${i+1}</td><td><button class="ghost" onclick="profile('${id}')">${esc(displayName(id))}</button></td><td><b>${p.rating}</b></td><td>${p.games}</td><td>${p.w} / ${p.l} / ${p.d}</td></tr>`).join('')}</tbody></table></section>`,`rating`)}
 const AVATARS={king:'♔',queen:'♕',rook:'♖',bishop:'♗',knight:'♘',pawn:'♙'};
 const AVATAR_NAMES={king:'Король',queen:'Ферзь',rook:'Ладья',bishop:'Слон',knight:'Конь',pawn:'Пешка'};
@@ -460,7 +479,7 @@ function showCreateTournament(){
   layout(`<section class="hero"><div class="eyebrow">Организатор</div><h1>Создать турнир</h1><p>Создайте турнир, добавьте игроков и проведите его по швейцарской системе.</p></section><section class="section"><form class="card form" onsubmit="createTournament(event)"><div class="field"><label>Название</label><input id="name" required placeholder="LOVE CHESS BLITZ"></div><div class="field"><label>Дата</label><input id="date" type="date" required></div><div class="field"><label>Время</label><input id="time" type="time" value="18:00" required></div><div class="field"><label>Место</label><input id="place" placeholder="GASTROKORT"></div><div class="grid"><div class="field"><label>Формат</label><select id="format"><option>Blitz</option><option>Rapid</option></select></div><div class="field"><label>Контроль</label><input id="control" value="5+3"></div><div class="field"><label>Туров</label><input id="rounds" type="number" value="9" min="1"></div></div><div class="actions"><button class="primary">Создать турнир</button><button type="button" class="ghost" onclick="route('admin')">Отмена</button></div></form></section>`,'admin');
 }
 function createTournament(e){if(!requireOrganizer())return;e.preventDefault();const t={id:'t'+Date.now(),name:document.getElementById('name').value,date:document.getElementById('date').value,time:document.getElementById('time').value,place:document.getElementById('place').value||'—',format:document.getElementById('format').value,control:document.getElementById('control').value,rounds:+document.getElementById('rounds').value,fee:0,status:'Регистрация',players:[],playerStatus:{},currentRound:0,roundData:[]};db.tournaments.push(t);save();tournament(t.id)}
-let photoIndex=0;function renderPhotos(){const track=document.getElementById('photoTrack'),dots=document.getElementById('photoDots');if(!track||!dots)return;const slides=track.children;if(!slides.length)return;photoIndex=(photoIndex+slides.length)%slides.length;track.style.transform=`translateX(-${photoIndex*100}%)`;dots.innerHTML=[...slides].map((_,i)=>`<button class="dot ${i===photoIndex?'active':''}" onclick="photoGo(${i})" aria-label="Фото ${i+1}"></button>`).join('')}function photoGo(i){photoIndex=i;renderPhotos()}function photoNext(){photoIndex++;renderPhotos()}function photoPrev(){photoIndex--;renderPhotos()}
+let photoIndex=0;let photoAutoTimer=null;function renderPhotos(){const track=document.getElementById('photoTrack'),dots=document.getElementById('photoDots');if(!track||!dots)return;const slides=track.children;if(!slides.length)return;photoIndex=(photoIndex+slides.length)%slides.length;track.style.transform=`translateX(-${photoIndex*100}%)`;dots.innerHTML=[...slides].map((_,i)=>`<button class="dot ${i===photoIndex?'active':''}" onclick="photoGo(${i})" aria-label="Фото ${i+1}"></button>`).join('')}function stopPhotoAuto(){if(photoAutoTimer){clearInterval(photoAutoTimer);photoAutoTimer=null}}function startPhotoAuto(){stopPhotoAuto();const track=document.getElementById('photoTrack');if(!track||track.children.length<2)return;photoAutoTimer=setInterval(()=>{if(document.hidden)return;photoNext()},5000)}function photoGo(i){photoIndex=i;renderPhotos();startPhotoAuto()}function photoNext(){photoIndex++;renderPhotos()}function photoPrev(){photoIndex--;renderPhotos();startPhotoAuto()}
 
 function deleteTournament(id){
   if(!isOrganizer()) return;
@@ -489,7 +508,7 @@ function route(r){
   if(typeof r !== 'string') r='schedule';
   if(r==='organizer')return organizerLogin();
   if(r==='profile')return profileHome();
-  if(r==='clock'){chessClock();clockEnterFullscreen();return;}
+  if(r==='clock')return chessClock();
   if(r==='schedule')return schedule();
   if(r==='rating')return rating();
   if(r==='admin')return admin();
@@ -499,58 +518,23 @@ function route(r){
 }
 
 
-let clockState={left:300000,right:300000,inc:3000,active:null,running:false,lastTick:0,interval:null,base:300000,fullscreen:false};
+let clockState={left:300000,right:300000,inc:3000,active:null,running:false,lastTick:0,interval:null};
 function clockFmt(ms){ms=Math.max(0,Math.ceil(ms/1000));const m=Math.floor(ms/60),s=ms%60;return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')}
 function clockRender(){
- const ids=[['clockLeft','left'],['clockRight','right'],['clockFsLeft','left'],['clockFsRight','right']];
- ids.forEach(([id,side])=>{const el=document.getElementById(id);if(el)el.textContent=clockFmt(clockState[side])});
- ['left','right'].forEach(side=>{
-   const el=document.getElementById(side==='left'?'clockLeft':'clockRight');
-   if(el){el.classList.toggle('clock-active',clockState.active===side);el.classList.toggle('clock-zero',clockState[side]<=0)}
-   const fs=document.getElementById(side==='left'?'clockFsLeft':'clockFsRight');
-   if(fs){fs.classList.toggle('clock-active',clockState.active===side);fs.classList.toggle('clock-zero',clockState[side]<=0)}
- });
- const st=document.getElementById('clockStatus');if(st)st.textContent=clockState.running?'Идёт игра':'Пауза';
- const fsst=document.getElementById('clockFsStatus');if(fsst)fsst.textContent=clockState.running?'Идёт игра':'Пауза';
+ const l=document.getElementById('clockLeft'),r=document.getElementById('clockRight'),st=document.getElementById('clockStatus');
+ if(!l||!r)return;
+ l.textContent=clockFmt(clockState.left);r.textContent=clockFmt(clockState.right);
+ l.classList.toggle('clock-active',clockState.active==='left');r.classList.toggle('clock-active',clockState.active==='right');
+ l.classList.toggle('clock-zero',clockState.left<=0);r.classList.toggle('clock-zero',clockState.right<=0);
+ if(st)st.textContent=clockState.running?(clockState.active==='left'?'Ход белых':'Ход чёрных'):'Пауза';
 }
 function clockTick(){if(!clockState.running||!clockState.active)return;const now=Date.now(),delta=Math.min(now-clockState.lastTick,1000);clockState.lastTick=now;clockState[clockState.active]-=delta;if(clockState[clockState.active]<=0){clockState[clockState.active]=0;clockState.running=false;clockState.active=null}clockRender()}
 function clockStart(){if(clockState.left<=0||clockState.right<=0)return;if(!clockState.active)clockState.active='left';clockState.running=!clockState.running;clockState.lastTick=Date.now();clockRender()}
 function clockPress(side){if(clockState[side]<=0)return;if(clockState.running&&clockState.active===side){clockState[side]+=clockState.inc;clockState.active=side==='left'?'right':'left';clockState.lastTick=Date.now();clockRender();return}if(!clockState.running){clockState.active=side==='left'?'right':'left';clockState.lastTick=Date.now();clockState.running=true;clockRender()}}
 function clockReset(){clockState.running=false;clockState.active=null;clockState.left=clockState.base;clockState.right=clockState.base;clockRender()}
-function clockPreset(min,inc){clockState.base=min*60000;clockState.inc=inc*1000;clockReset();const p=document.getElementById('clockPreset');if(p)p.value=min+'+'+inc;const m=document.getElementById('clockMin');const i=document.getElementById('clockInc');if(m)m.value=min;if(i)i.value=inc}
+function clockPreset(min,inc){clockState.base=min*60000;clockState.inc=inc*1000;clockReset();const p=document.getElementById('clockPreset');if(p)p.value=min+'+'+inc}
 function clockCustom(){const m=Math.max(1,Math.min(180,parseInt(document.getElementById('clockMin').value,10)||5));const inc=Math.max(0,Math.min(60,parseInt(document.getElementById('clockInc').value,10)||0));clockPreset(m,inc)}
 function clockSwap(){const a=clockState.left;clockState.left=clockState.right;clockState.right=a;const s=clockState.active;if(s)clockState.active=s==='left'?'right':'left';clockRender()}
-function clockToggleSettings(){const p=document.getElementById('clockFsSettings');if(p)p.classList.toggle('open')}
-function clockExitFullscreen(){
- const fs=document.getElementById('clockFullscreen');if(fs)fs.remove();
- document.body.classList.remove('clock-lock');clockState.fullscreen=false;
- if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});
- clockRender();
-}
-function clockEnterFullscreen(){
- if(clockState.fullscreen)return;
- clockState.fullscreen=true;document.body.classList.add('clock-lock');
- const el=document.createElement('div');el.id='clockFullscreen';el.className='clock-fullscreen';
- el.innerHTML=`
-   <button class="clock-fs-side clock-fs-top" onclick="clockPress('right')" aria-label="Верхние часы"><strong id="clockFsRight">05:00</strong></button>
-   <button class="clock-fs-side clock-fs-bottom" onclick="clockPress('left')" aria-label="Нижние часы"><strong id="clockFsLeft">05:00</strong></button>
-   <div class="clock-fs-center">
-     <button class="clock-fs-icon" onclick="clockStart()" aria-label="Старт или пауза"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6L19 12 8 5.2Z" fill="currentColor"/></svg></button>
-     <button class="clock-fs-icon" onclick="clockReset()" aria-label="Сбросить"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4.2L3 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 4.5V9h4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 13a8 8 0 0 0 14.8 4.2L21 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 19.5V15h-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-     <button class="clock-fs-icon" onclick="clockToggleSettings()" aria-label="Настройки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m19.2 13.4 1.2 1-.9 1.6-1.5-.5a7.8 7.8 0 0 1-1.8 1l-.3 1.6h-1.9l-.3-1.6a7.8 7.8 0 0 1-1.8-1l-1.5.5-.9-1.6 1.2-1a7.5 7.5 0 0 1 0-2.8l-1.2-1 .9-1.6 1.5.5a7.8 7.8 0 0 1 1.8-1l.3-1.6h1.9l.3 1.6a7.8 7.8 0 0 1 1.8 1l1.5-.5.9 1.6-1.2 1a7.5 7.5 0 0 1 0 2.8Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
-     <button class="clock-fs-icon" onclick="clockExitFullscreen();route('schedule')" aria-label="Домой"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1v-9Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
-   </div>
-   <div class="clock-fs-status" id="clockFsStatus">Пауза</div>
-   <div class="clock-fs-settings" id="clockFsSettings">
-     <div class="clock-fs-settings-head"><b>Настройки часов</b><button class="clock-fs-close" onclick="clockToggleSettings()">×</button></div>
-     <div class="clock-fs-presets"><button onclick="clockPreset(3,2);clockToggleSettings()">3+2</button><button onclick="clockPreset(5,3);clockToggleSettings()">5+3</button><button onclick="clockPreset(10,0);clockToggleSettings()">10+0</button><button onclick="clockPreset(15,10);clockToggleSettings()">15+10</button></div>
-     <div class="clock-fs-custom"><input id="clockFsMin" type="number" min="1" max="180" value="5"><span>+</span><input id="clockFsInc" type="number" min="0" max="60" value="3"><span>сек</span><button onclick="clockFsCustom();clockToggleSettings()">Установить</button></div>
-     <button class="clock-fs-swap" onclick="clockSwap();clockToggleSettings()">Поменять местами</button>
-   </div>`;
- document.body.appendChild(el);clockRender();
- if(el.requestFullscreen){el.requestFullscreen().catch(()=>{})}
-}
-function clockFsCustom(){const m=Math.max(1,Math.min(180,parseInt(document.getElementById('clockFsMin').value,10)||5));const inc=Math.max(0,Math.min(60,parseInt(document.getElementById('clockFsInc').value,10)||0));clockPreset(m,inc)}
 function chessClock(){
  if(clockState.interval)clearInterval(clockState.interval);
  if(!clockState.base)clockState.base=300000;
@@ -558,7 +542,7 @@ function chessClock(){
  <section class="section"><div class="clock-wrap">
    <div class="clock-toolbar"><div class="clock-presets"><button class="ghost" onclick="clockPreset(3,2)">3+2</button><button class="ghost" onclick="clockPreset(5,3)">5+3</button><button class="ghost" onclick="clockPreset(10,0)">10+0</button><button class="ghost" onclick="clockPreset(15,10)">15+10</button></div><div class="clock-custom"><input id="clockMin" type="number" min="1" max="180" value="5" aria-label="Минуты"><span>+</span><input id="clockInc" type="number" min="0" max="60" value="3" aria-label="Добавление секунд"><span>сек</span><button class="primary" onclick="clockCustom()">Установить</button></div></div>
    <div class="clock-board"><button class="clock-side" onclick="clockPress('left')" aria-label="Левые часы"><strong id="clockLeft">05:00</strong></button><button class="clock-side" onclick="clockPress('right')" aria-label="Правые часы"><strong id="clockRight">05:00</strong></button></div>
-   <div class="clock-actions"><button class="primary" onclick="clockStart()">Старт / Пауза</button><button class="ghost" onclick="clockReset()">Сбросить</button><button class="ghost" onclick="clockSwap()">Поменять местами</button><button class="ghost clock-fullscreen-open" onclick="clockEnterFullscreen()">На весь экран</button></div><div id="clockStatus" class="clock-status" aria-live="polite">Пауза</div>
+   <div class="clock-actions"><button class="primary" onclick="clockStart()">Старт / Пауза</button><button class="ghost" onclick="clockReset()">Сбросить</button><button class="ghost" onclick="clockSwap()">Поменять местами</button></div><div id="clockStatus" class="clock-status" aria-live="polite">Пауза</div>
  </div></section>`,'clock');
  clockRender();clockState.interval=setInterval(clockTick,200);
 }
