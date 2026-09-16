@@ -261,3 +261,42 @@ button{-webkit-tap-highlight-color:transparent}
   .clock-side{min-height:175px}
   .clock-side strong{font-size:56px}
 }
+
+/* Fullscreen chess clock */
+body.clock-lock{overflow:hidden!important;overscroll-behavior:none;touch-action:none}
+.clock-fullscreen{position:fixed;inset:0;width:100vw;height:100dvh;min-height:100svh;background:#090909;color:#fff;z-index:99999;overflow:hidden;overscroll-behavior:none;touch-action:none;display:flex;flex-direction:column}
+.clock-fs-side{position:absolute;left:0;width:100%;height:50%;border:0;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;font:inherit}
+.clock-fs-top{top:0;border-bottom:1px solid #303030;transform:none}
+.clock-fs-bottom{bottom:0;border-top:1px solid #303030}
+.clock-fs-side strong{font-size:clamp(72px,22vw,180px);font-weight:700;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.055em}
+.clock-fs-top strong{transform:rotate(180deg)}
+.clock-fs-side.clock-active{background:#181818}
+.clock-fs-side.clock-zero{background:#202020;color:#777}
+.clock-fs-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;gap:10px;padding:9px 11px;background:rgba(25,25,25,.96);border:1px solid #444;border-radius:18px;z-index:3;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.clock-fs-icon{width:48px;height:48px;border:0;border-radius:12px;background:#222;color:#fff;font-size:22px;display:grid;place-items:center;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.clock-fs-icon:hover{background:#303030}
+.clock-fs-status{position:absolute;left:50%;top:calc(50% + 48px);transform:translateX(-50%);z-index:3;color:#888;font-size:12px;white-space:nowrap;pointer-events:none}
+.clock-fs-settings{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.97);width:min(420px,calc(100vw - 32px));padding:18px;background:rgba(20,20,20,.98);border:1px solid #444;border-radius:18px;z-index:10;box-shadow:0 20px 60px rgba(0,0,0,.65);opacity:0;pointer-events:none;transition:.15s ease}
+.clock-fs-settings.open{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+.clock-fs-settings-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.clock-fs-close{border:0;background:transparent;color:#aaa;font-size:28px;line-height:1;cursor:pointer;padding:2px 6px}
+.clock-fs-presets{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.clock-fs-presets button,.clock-fs-swap,.clock-fs-custom button{min-height:44px;border:1px solid #444;background:#222;color:#fff;border-radius:10px;padding:8px 10px;font-weight:600;cursor:pointer}
+.clock-fs-custom{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto;gap:7px;align-items:center}
+.clock-fs-custom input{width:100%;min-width:0;min-height:44px;border:1px solid #444;background:#111;color:#fff;border-radius:10px;padding:8px 10px;font-size:16px}
+.clock-fs-custom button{grid-column:1/-1}
+.clock-fs-swap{width:100%;margin-top:8px}
+.clock-fullscreen-open{display:none}
+@media(max-width:700px){
+  .clock-fullscreen-open{display:block!important;grid-column:1/-1}
+  .clock-fs-center{gap:7px;padding:7px 8px;border-radius:16px}
+  .clock-fs-icon{width:44px;height:44px;border-radius:11px}
+  .clock-fs-status{top:calc(50% + 43px)}
+  .clock-fs-settings{padding:15px}
+  .clock-fs-presets{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:380px){
+  .clock-fs-icon{width:40px;height:40px;font-size:19px}
+  .clock-fs-center{gap:5px}
+  .clock-fs-status{display:none}
+}
