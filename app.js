@@ -579,7 +579,11 @@ function chessClock(){
    <div class="clock-board"><button class="clock-side" onpointerdown="clockPress('left');event.preventDefault()" aria-label="Левые часы"><strong id="clockLeft">05:00</strong></button><button class="clock-side" onpointerdown="clockPress('right');event.preventDefault()" aria-label="Правые часы"><strong id="clockRight">05:00</strong></button></div>
    <div class="clock-actions"><button class="primary" onclick="clockStart()">Старт / Пауза</button><button class="ghost" onclick="clockReset()">Сбросить</button><button class="ghost" onclick="clockSwap()">Поменять местами</button><button class="ghost clock-fullscreen-open" onclick="clockEnterFullscreen()">На весь экран</button></div><div id="clockStatus" class="clock-status" aria-live="polite">Пауза</div>
  </div></section>`,'clock');
- clockRender();clockState.interval=setInterval(clockTick,50);
+ clockRender();
+ clockState.interval=setInterval(clockTick,50);
+ // На странице часов сразу открываем полноэкранный интерфейс. На iPhone/iPad
+ // CSS-overlay работает даже там, где браузер не разрешает API fullscreen.
+ setTimeout(()=>{if(!clockState.fullscreen && location.hash.replace(/^#/,'')==='clock')clockEnterFullscreen()},0);
 }
 window.addEventListener('hashchange',()=>{ const r=location.hash.replace(/^#/, '')||'schedule'; route(r); });
 schedule();
