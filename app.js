@@ -535,16 +535,64 @@ function clockReset(){clockState.running=false;clockState.active=null;clockState
 function clockPreset(min,inc){clockState.base=min*60000;clockState.inc=inc*1000;clockReset();const p=document.getElementById('clockPreset');if(p)p.value=min+'+'+inc}
 function clockCustom(){const m=Math.max(1,Math.min(180,parseInt(document.getElementById('clockMin').value,10)||5));const inc=Math.max(0,Math.min(60,parseInt(document.getElementById('clockInc').value,10)||0));clockPreset(m,inc)}
 function clockSwap(){const a=clockState.left;clockState.left=clockState.right;clockState.right=a;const s=clockState.active;if(s)clockState.active=s==='left'?'right':'left';clockRender()}
+function clockExitFullscreen(){
+ document.body.classList.remove('clock-fullscreen-active');
+ document.documentElement.classList.remove('clock-document-fullscreen');
+ if(document.fullscreenElement && document.exitFullscreen){document.exitFullscreen().catch(()=>{});}
+}
+function clockEnterFullscreen(){
+ document.body.classList.add('clock-fullscreen-active');
+ document.documentElement.classList.add('clock-document-fullscreen');
+ // Native fullscreen is an extra layer on desktop/Android. CSS fullscreen remains the fallback.
+ if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen().catch(()=>{});}
+}
+function installClockFullscreenStyles(){
+ if(document.getElementById('clockFullscreenStyles'))return;
+ const style=document.createElement('style');style.id='clockFullscreenStyles';style.textContent=`
+html.clock-document-fullscreen,html.clock-document-fullscreen body{width:100%;height:100%;overflow:hidden}
+body.clock-fullscreen-active{overflow:hidden!important;background:#000!important}
+body.clock-fullscreen-active>.nav{display:none!important}
+body.clock-fullscreen-active>main.shell{position:fixed!important;inset:0!important;width:100%!important;max-width:none!important;margin:0!important;padding:0!important;z-index:9999!important;background:#000!important}
+body.clock-fullscreen-active .clock-page-hero{display:none!important}
+body.clock-fullscreen-active .clock-page-section{position:fixed!important;inset:0!important;width:100%!important;height:100dvh!important;margin:0!important;padding:0!important;z-index:10000!important;background:#000!important}
+body.clock-fullscreen-active .clock-wrap{position:fixed!important;inset:0!important;width:100%!important;max-width:none!important;height:100dvh!important;min-height:100dvh!important;margin:0!important;padding:0!important;background:#000!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
+body.clock-fullscreen-active .clock-toolbar{display:none!important}
+body.clock-fullscreen-active .clock-board{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;display:grid!important;grid-template-columns:1fr!important;grid-template-rows:1fr 1fr!important;gap:0!important;background:#000!important}
+body.clock-fullscreen-active .clock-side{min-height:0!important;height:100%!important;width:100%!important;border:0!important;border-radius:0!important;border-bottom:1px solid #252525!important;background:#0b0b0b!important;padding:0!important;margin:0!important;display:flex!important;align-items:center!important;justify-content:center!important;color:#fff!important;touch-action:manipulation!important;-webkit-tap-highlight-color:transparent!important;user-select:none!important}
+body.clock-fullscreen-active .clock-side:first-child strong{transform:rotate(180deg)}
+body.clock-fullscreen-active .clock-side.clock-active{background:#171717!important}
+body.clock-fullscreen-active .clock-side.clock-zero{background:#080808!important;color:#555!important}
+body.clock-fullscreen-active .clock-side strong{font-size:clamp(72px,22vw,260px)!important;line-height:.9!important;font-weight:700!important;letter-spacing:-.055em!important;font-variant-numeric:tabular-nums!important}
+body.clock-fullscreen-active .clock-actions{position:fixed!important;left:50%!important;bottom:max(10px,env(safe-area-inset-bottom))!important;transform:translateX(-50%)!important;z-index:10002!important;margin:0!important;padding:6px!important;border:1px solid #292929!important;border-radius:14px!important;background:rgba(12,12,12,.86)!important;backdrop-filter:blur(10px)!important;-webkit-backdrop-filter:blur(10px)!important;display:flex!important;gap:6px!important;flex-wrap:nowrap!important}
+body.clock-fullscreen-active .clock-actions button{min-height:34px!important;padding:7px 10px!important;font-size:12px!important;border-radius:9px!important;white-space:nowrap!important}
+body.clock-fullscreen-active .clock-home{font-size:18px!important;padding:5px 11px!important}
+body.clock-fullscreen-active .clock-status{position:fixed!important;left:50%!important;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 58px)!important;transform:translateX(-50%)!important;z-index:10002!important;margin:0!important;min-height:0!important;padding:4px 9px!important;border-radius:8px!important;background:rgba(0,0,0,.55)!important;color:#777!important;font-size:11px!important;pointer-events:none!important}
+@media(max-width:600px){body.clock-fullscreen-active .clock-actions{bottom:max(6px,env(safe-area-inset-bottom))!important}body.clock-fullscreen-active .clock-actions button{min-height:32px!important;padding:6px 8px!important;font-size:11px!important}body.clock-fullscreen-active .clock-side strong{font-size:clamp(62px,23vw,150px)!important}body.clock-fullscreen-active .clock-status{bottom:calc(max(6px,env(safe-area-inset-bottom)) + 52px)!important}}
+`;
+ document.head.appendChild(style);
+}
 function chessClock(){
+ installClockFullscreenStyles();
  if(clockState.interval)clearInterval(clockState.interval);
  if(!clockState.base)clockState.base=300000;
- layout(`<section class="hero"><div class="eyebrow">LOVE CHESS</div><h1>Шахматные часы</h1><p>Два цифровых таймера с добавлением времени после хода.</p></section>
- <section class="section"><div class="clock-wrap">
+ clockExitFullscreen();
+ layout(`<section class="hero clock-page-hero"><div class="eyebrow">LOVE CHESS</div><h1>Шахматные часы</h1><p>Два цифровых таймера с добавлением времени после хода.</p></section>
+ <section class="section clock-page-section"><div class="clock-wrap">
    <div class="clock-toolbar"><div class="clock-presets"><button class="ghost" onclick="clockPreset(3,2)">3+2</button><button class="ghost" onclick="clockPreset(5,3)">5+3</button><button class="ghost" onclick="clockPreset(10,0)">10+0</button><button class="ghost" onclick="clockPreset(15,10)">15+10</button></div><div class="clock-custom"><input id="clockMin" type="number" min="1" max="180" value="5" aria-label="Минуты"><span>+</span><input id="clockInc" type="number" min="0" max="60" value="3" aria-label="Добавление секунд"><span>сек</span><button class="primary" onclick="clockCustom()">Установить</button></div></div>
-   <div class="clock-board"><button class="clock-side" onclick="clockPress('left')" aria-label="Левые часы"><strong id="clockLeft">05:00</strong></button><button class="clock-side" onclick="clockPress('right')" aria-label="Правые часы"><strong id="clockRight">05:00</strong></button></div>
-   <div class="clock-actions"><button class="primary" onclick="clockStart()">Старт / Пауза</button><button class="ghost" onclick="clockReset()">Сбросить</button><button class="ghost" onclick="clockSwap()">Поменять местами</button></div><div id="clockStatus" class="clock-status" aria-live="polite">Пауза</div>
+   <div class="clock-board"><button class="clock-side" onclick="clockPress('left')" aria-label="Верхние часы"><strong id="clockLeft">05:00</strong></button><button class="clock-side" onclick="clockPress('right')" aria-label="Нижние часы"><strong id="clockRight">05:00</strong></button></div>
+   <div class="clock-actions"><button class="primary" onclick="clockStart()">Старт / Пауза</button><button class="ghost" onclick="clockReset()">Сбросить</button><button class="ghost" onclick="clockSwap()">Поменять местами</button><button class="ghost clock-home" onclick="clockExitFullscreen();route('schedule')" aria-label="На главную">⌂</button></div><div id="clockStatus" class="clock-status" aria-live="polite">Пауза</div>
  </div></section>`,'clock');
- clockRender();clockState.interval=setInterval(clockTick,200);
+ clockRender();
+ clockEnterFullscreen();
+ clockState.interval=setInterval(clockTick,100);
 }
+document.addEventListener('fullscreenchange',()=>{
+ if(!document.fullscreenElement && document.body.classList.contains('clock-fullscreen-active')){
+   document.body.classList.add('clock-fullscreen-active');
+ }
+});
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape' && document.body.classList.contains('clock-fullscreen-active')){clockExitFullscreen();route('schedule');}
+});
 window.addEventListener('hashchange',()=>{ const r=location.hash.replace(/^#/, '')||'schedule'; route(r); });
 schedule();
